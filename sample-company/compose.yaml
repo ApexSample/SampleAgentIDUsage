@@ -1,0 +1,116 @@
+name: sample-company
+
+services:
+  checkout-api:
+    build:
+      context: ../../..
+      dockerfile: examples/external-services/sample-company/Dockerfile
+    command: ["npm", "run", "start:checkout", "--workspace", "@digital-workforce-examples/sample-company"]
+    environment:
+      INVENTORY_BASE_URL: http://inventory-api:4101
+      PORT: "4100"
+    ports:
+      - "127.0.0.1:${CHECKOUT_PORT:-4100}:4100"
+    networks: [company-internal, integration-edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4100/health"]
+      interval: 2s
+      timeout: 1s
+      retries: 20
+
+  inventory-api:
+    build:
+      context: ../../..
+      dockerfile: examples/external-services/sample-company/Dockerfile
+    command: ["npm", "run", "start:inventory", "--workspace", "@digital-workforce-examples/sample-company"]
+    environment:
+      PORT: "4101"
+    networks: [company-internal]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4101/health"]
+      interval: 2s
+      timeout: 1s
+      retries: 20
+
+  incident-api:
+    build:
+      context: ../../..
+      dockerfile: examples/external-services/sample-company/Dockerfile
+    command: ["npm", "run", "start:incidents", "--workspace", "@digital-workforce-examples/sample-company"]
+    environment:
+      ALERT_WEBHOOK_TOKEN: sample-company-alert-webhook
+      INCIDENT_API_TOKEN: sample-company-incident-reader
+      SAMPLE_COMPANY_ADMIN_TOKEN: ${SAMPLE_COMPANY_ADMIN_TOKEN:-sample-company-admin}
+      AGENTID_CLIENT_ID: ${AGENTID_CLIENT_ID:-860c1ca5-800a-4e13-81a1-f998d5997f5a}
+      AGENTID_CLIENT_SECRET: ${AGENTID_CLIENT_SECRET:-}
+      AGENTID_ALLOWED_EMAIL: ${AGENTID_ALLOWED_EMAIL:-employeeagent@agentmail.to}
+      AGENTID_AGENT_ROLES: ${AGENTID_AGENT_ROLES:-incident_reader}
+      AGENTID_REDIRECT_URI: http://localhost:4102/auth/agentid/callback
+      AGENTID_PORTAL_ORIGIN: http://localhost:5173
+      AGENT_ACCESS_TOKEN_ISSUER: http://localhost:4102
+      AGENT_ACCESS_TOKEN_AUDIENCE: sample-company-operations
+      AGENT_ACCESS_TOKEN_SIGNING_SECRET: ${AGENT_ACCESS_TOKEN_SIGNING_SECRET:-local-sample-company-agent-token-signing-only}
+      PROMETHEUS_BASE_URL: http://prometheus:9090
+      PORT: "4102"
+    ports:
+      - "127.0.0.1:${INCIDENT_PORT:-4102}:4102"
+    networks: [company-internal, integration-edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4102/health"]
+      interval: 2s
+      timeout: 1s
+      retries: 20
+
+  invoice-mcp:
+    build:
+      context: ../../..
+      dockerfile: examples/external-services/sample-company/Dockerfile
+    command: ["npm", "run", "start:invoices", "--workspace", "@digital-workforce-examples/sample-company"]
+    environment:
+      INVOICE_MCP_TOKEN: ${INVOICE_MCP_TOKEN:-sample-company-invoice-reader}
+      INVOICE_PDF_DIRECTORY: /data/invoices
+      PORT: "4103"
+    ports:
+      - "127.0.0.1:${INVOICE_MCP_PORT:-4103}:4103"
+    volumes:
+      - ../../../external_data/PDF_Invoice_Folder:/data/invoices:ro
+    networks: [company-internal, integration-edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4103/health"]
+      interval: 2s
+      timeout: 1s
+      retries: 20
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks: [company-internal, integration-edge]
+    depends_on:
+      checkout-api:
+        condition: service_healthy
+      alertmanager:
+        condition: service_started
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+    networks: [company-internal, integration-edge]
+    depends_on:
+      incident-api:
+        condition: service_healthy
+
+networks:
+  company-internal:
+    name: sample-company-internal
+    internal: true
+  integration-edge:
+    name: sample-company-integration-edge

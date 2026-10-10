@@ -1,0 +1,25 @@
+{
+  "name": "@digital-workforce-examples/sample-company",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start:checkout": "node dist/checkout-server.js",
+    "start:inventory": "node dist/inventory-server.js",
+    "start:incidents": "node dist/incident-server.js",
+    "start:invoices": "node dist/invoice-server.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "fastify": "^5.6.0",
+    "jose": "^6.2.12",
+    "pdfjs-dist": "^6.4.299",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}

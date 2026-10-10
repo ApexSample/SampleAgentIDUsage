@@ -1,0 +1,15 @@
+route:
+  receiver: sample-company-incidents
+  group_wait: 0s
+  group_interval: 2s
+  repeat_interval: 1h
+
+receivers:
+  - name: sample-company-incidents
+    webhook_configs:
+      - url: http://incident-api:4102/v1/alertmanager/events
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            credentials: sample-company-alert-webhook

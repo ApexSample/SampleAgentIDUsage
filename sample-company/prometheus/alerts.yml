@@ -1,0 +1,13 @@
+groups:
+  - name: sample-company-services
+    rules:
+      - alert: InventoryUnavailable
+        expr: sample_company_inventory_up == 0
+        for: 2s
+        labels:
+          service: checkout-api
+          dependency: inventory-api
+          severity: critical
+        annotations:
+          summary: Inventory API is unavailable
+          description: Checkout API cannot reach Inventory API, so order creation is failing.

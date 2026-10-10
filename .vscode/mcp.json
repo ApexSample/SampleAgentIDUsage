@@ -1,0 +1,13 @@
+{
+	"servers": {
+		"codemarker": {
+			"type": "stdio",
+			"command": "node",
+			"args": [
+				"/Users/ashishkumar/.vscode/extensions/codemarker.codemarker-0.0.4/packages/mcp-server/dist/index.js",
+				"--workspace",
+				"${workspaceFolder}"
+			]
+		}
+	}
+}
