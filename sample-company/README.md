@@ -22,9 +22,9 @@ Prometheus ----> Alertmanager ----> Incident API
                               Digital Workforce
 
 Invoice PDFs ---- read-only mount ----> Invoice MCP
-                                 ^
-                                 |
-                         authenticated integration edge
+                              ^
+                              | bearer token
+Digital Workforce ---- OAuth ----> Finance AGNTID runtime
 ```
 
 Checkout exposes a controlled dependency failure when Inventory is unavailable.
@@ -163,6 +163,75 @@ The supplied dataset contains 1,007 PDFs. Verification normalizes and validates
 invoice number, customer, line item, or order ID; `invoice.validate` routes them
 to `review_required` instead of inventing fields. No tool modifies source PDFs
 or creates an accounts-payable record.
+
+## Dedicated Finance AGNTID Runtime
+
+The Kubernetes development environment places a dedicated, customer-owned
+AGNTID runtime in front of the invoice MCP. This is a second runtime, not an
+additional connection on the general tenant runtime. It has its own AgentID
+registration identity and separate config, data, log, and MCP-cache PVCs.
+
+The authentication boundaries are independent:
+
+```text
+Digital Workforce -- OAuth access token --> Finance AGNTID runtime
+Finance AGNTID runtime -- bearer token --> Sample Company invoice MCP
+```
+
+Digital Workforce must not receive `INVOICE_MCP_TOKEN` or call the invoice MCP
+directly. Kubernetes NetworkPolicy permits invoice MCP ingress only from
+`agntid-finance-runtime`. The runtime has no database credential, Kubernetes
+service-account token, Docker socket, or host mount.
+
+Deploy both components into the existing Sample Company namespace:
+
+```sh
+scripts/deploy-sample-company-finance-mcp.sh
+```
+
+The script creates or reuses the downstream bearer secret, imports the local
+invoice MCP image, copies the invoice PDFs into the customer PVC, deploys the
+dedicated runtime, and removes the finance token from the general runtime.
+
+Expose the new runtime locally for initial setup:
+
+```sh
+kubectl --context k3d-dw-policy-test \
+      --namespace dw-sample-company \
+      port-forward service/agntid-finance-runtime 18181:8080 18182:8000
+```
+
+Open `http://127.0.0.1:18181` and register it with a new bootstrap token as
+**Sample Company Finance Gateway**. Enter bootstrap tokens only in the runtime
+UI; do not put them in shell history, source files, or chat. Registration alone
+does not enable client authentication.
+
+Attach the customer MCP to this runtime in the AGNTID portal:
+
+| Setting | Value |
+| --- | --- |
+| Connection style | `Remote HTTP` |
+| Server ID | `finance` |
+| Prefix | `finance` |
+| URL | `http://sample-company-finance-mcp:4103/mcp` |
+| Authentication | `bearer_token` |
+| Token environment variable | `INVOICE_MCP_TOKEN` |
+
+Confirm the connection is applied and exposes the four `invoice.*` tools. Then
+enable OAuth for this runtime's MCP endpoint in its **Setup** tab. The portal
+synchronizes the OAuth configuration to the runtime; do not add an ad hoc OAuth
+secret to the Kubernetes manifest.
+
+Before registering the endpoint with Digital Workforce, prove all three client
+authentication cases against `http://127.0.0.1:18182/mcp`:
+
+1. A request without a token is rejected.
+2. A request with an invalid token is rejected.
+3. A valid Digital Workforce OAuth token can initialize MCP and list the four
+       finance tools.
+
+For production, expose the gateway through an internal HTTPS endpoint. The
+local port-forward and plain HTTP endpoint are development-only.
 
 ## Persistent Development Environment
 
